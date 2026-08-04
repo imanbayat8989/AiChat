@@ -3,11 +3,11 @@ using Microsoft.SemanticKernel.ChatCompletion;
 
 var builder = Kernel.CreateBuilder();
 
-// Connect directly to Groq (Uses standard OpenAI protocol, free & fast)
+// Connect to local Ollama server running llama3.2
 builder.AddOpenAIChatCompletion(
-    modelId: "llama-3.3-70b-versatile",               // Extremely fast & high quality
-    apiKey: "YOUR_GROQ_API_KEY_HERE",              // Replace with your gsk_ key
-    endpoint: new Uri("https://api.groq.com/openai/v1")
+    modelId: "llama3.2",                           // Model name pulled in Ollama
+    apiKey: "ollama",                              // Dummy key required by OpenAI client initialization
+    endpoint: new Uri("http://localhost:11434/v1") // Local Ollama server address
 );
 
 Kernel kernel = builder.Build();
@@ -15,10 +15,11 @@ Kernel kernel = builder.Build();
 var chatService = kernel.GetRequiredService<IChatCompletionService>();
 var history = new ChatHistory();
 
-Console.WriteLine("Connected to Groq! Type your message below:\n");
+Console.WriteLine("Connected to Local Ollama (llama3.2)! Type your message below:\n");
 
 while (true)
 {
+    Console.ResetColor();
     Console.Write("User >> ");
     var userMessage = Console.ReadLine();
 
@@ -26,17 +27,32 @@ while (true)
 
     history.AddUserMessage(userMessage);
 
-    var response = chatService.GetStreamingChatMessageContentsAsync(history, kernel: kernel);
-
     Console.Write("AI >> ");
 
-    string fullResponse = "";
-    await foreach (var chat in response)
+    try
     {
-        Console.Write(chat.Content);
-        fullResponse += chat.Content;
+        var response = chatService.GetStreamingChatMessageContentsAsync(history, kernel: kernel);
+        string fullResponse = "";
+
+        Console.ForegroundColor = ConsoleColor.Green;
+
+        await foreach (var chat in response)
+        {
+            Console.Write(chat.Content);
+            fullResponse += chat.Content;
+        }
+
+        history.AddAssistantMessage(fullResponse);
+    }
+    catch (Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"\n[Error]: Could not reach local Ollama instance. Is Ollama running? Details: {ex.Message}");
+    }
+    finally
+    {
+        Console.ResetColor() ;
     }
 
-    history.AddAssistantMessage(fullResponse);
     Console.WriteLine("\n");
 }
